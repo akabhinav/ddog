@@ -1,0 +1,79 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'observx-platform'
+    environment: 'production'
+
+# Alerting configuration (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - alertmanager:9093
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ObservX Collector instances
+  - job_name: 'observx-collector'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets:
+          - 'collector-1:8081'
+          - 'collector-2:8081'
+          - 'collector-3:8081'
+        labels:
+          service: 'collector'
+          component: 'ingestion'
+
+  # ObservX Storage instances
+  - job_name: 'observx-storage'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets:
+          - 'storage-1:8082'
+          - 'storage-2:8082'
+        labels:
+          service: 'storage'
+          component: 'persistence'
+
+  # ObservX Query instances
+  - job_name: 'observx-query'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets:
+          - 'query-service-1:8083'
+          - 'query-service-2:8083'
+        labels:
+          service: 'query'
+          component: 'api'
+
+  # PostgreSQL/TimescaleDB exporter (optional)
+  # - job_name: 'postgres'
+  #   static_configs:
+  #     - targets: ['postgres-exporter:9187']
+
+  # Redis exporter (optional)
+  # - job_name: 'redis'
+  #   static_configs:
+  #     - targets: ['redis-exporter:9121']
+
+  # Kafka exporter (optional)
+  # - job_name: 'kafka'
+  #   static_configs:
+  #     - targets: ['kafka-exporter:9308']
+
+  # Nginx exporter (optional)
+  # - job_name: 'nginx'
+  #   static_configs:
+  #     - targets: ['nginx-exporter:9113']
+
+# Recording rules for aggregations
+rule_files:
+  # - "alerts.yml"
+  # - "recording_rules.yml"

@@ -1,0 +1,25 @@
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: "15s"
+      queryTimeout: "60s"
+
+  - name: TimescaleDB
+    type: postgres
+    url: timescaledb:5432
+    database: observx
+    user: observx
+    secureJsonData:
+      password: observx123
+    jsonData:
+      sslmode: 'disable'
+      postgresVersion: 1600
+      timescaledb: true
+    editable: true

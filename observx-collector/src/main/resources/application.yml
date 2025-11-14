@@ -2,6 +2,25 @@ spring:
   application:
     name: observx-collector
 
+  # Redis configuration for distributed caching
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+      timeout: 2000ms
+
+  # Cache configuration
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000  # 10 minutes
+
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
@@ -12,24 +31,73 @@ spring:
       properties:
         max.in.flight.requests.per.connection: 5
         enable.idempotence: true
+        compression.type: snappy  # Enable compression for better throughput
+        linger.ms: 10  # Batch messages for better performance
+        batch.size: 32768  # 32KB batch size
 
 server:
   port: 8081
   tomcat:
     threads:
       max: 1000  # High limit for Virtual Threads
+    connection-timeout: 60000
+  compression:
+    enabled: true
+    mime-types: application/json,text/plain
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,metrics,prometheus,circuitbreakers,ratelimiters
   metrics:
     export:
       prometheus:
         enabled: true
+    tags:
+      application: ${spring.application.name}
+  health:
+    circuitbreakers:
+      enabled: true
+    ratelimiters:
+      enabled: true
+
+# Resilience4j configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      kafka:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 30s
+        failureRateThreshold: 50
+        slowCallRateThreshold: 50
+        slowCallDurationThreshold: 2s
+        eventConsumerBufferSize: 10
+
+  bulkhead:
+    instances:
+      kafka:
+        maxConcurrentCalls: 1000
+        maxWaitDuration: 500ms
+
+  ratelimiter:
+    instances:
+      global:
+        limitForPeriod: 10000
+        limitRefreshPeriod: 1s
+        timeoutDuration: 100ms
+
+  timelimiter:
+    instances:
+      kafka:
+        timeoutDuration: 5s
 
 logging:
   level:
     com.observx: INFO
     org.springframework.kafka: WARN
+    io.github.resilience4j: INFO
