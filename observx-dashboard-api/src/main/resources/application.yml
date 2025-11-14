@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: observx-dashboard-api
+
+server:
+  port: 8084
+
+logging:
+  level:
+    com.observx: INFO

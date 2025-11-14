@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: observx-alerting
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: observx-alerting
+      auto-offset-reset: latest
+
+server:
+  port: 8085
+
+logging:
+  level:
+    com.observx: INFO

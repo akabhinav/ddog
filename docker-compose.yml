@@ -1,0 +1,152 @@
+version: '3.8'
+
+services:
+  # PostgreSQL with TimescaleDB for time-series data
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: observx-timescaledb
+    environment:
+      POSTGRES_DB: observx
+      POSTGRES_USER: observx
+      POSTGRES_PASSWORD: observx123
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescaledb-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U observx"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Apache Kafka for event streaming
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: observx-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: observx-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # ObservX Collector Service
+  collector:
+    build:
+      context: .
+      dockerfile: Dockerfile-collector
+    container_name: observx-collector
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      JAVA_OPTS: "-Xmx512m -Xms256m"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/v1/metrics/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ObservX Storage Service
+  storage:
+    build:
+      context: .
+      dockerfile: Dockerfile-storage
+    container_name: observx-storage
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8082:8082"
+    environment:
+      DB_HOST: timescaledb
+      DB_PORT: 5432
+      DB_NAME: observx
+      DB_USER: observx
+      DB_PASSWORD: observx123
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      JAVA_OPTS: "-Xmx512m -Xms256m"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ObservX Query Service
+  query-service:
+    build:
+      context: .
+      dockerfile: Dockerfile-query
+    container_name: observx-query-service
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    ports:
+      - "8083:8083"
+    environment:
+      DB_HOST: timescaledb
+      DB_PORT: 5432
+      DB_NAME: observx
+      DB_USER: observx
+      DB_PASSWORD: observx123
+      JAVA_OPTS: "-Xmx512m -Xms256m"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ObservX Gateway
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile-gateway
+    container_name: observx-gateway
+    depends_on:
+      - collector
+      - query-service
+    ports:
+      - "8080:8080"
+    environment:
+      COLLECTOR_URL: http://collector:8081
+      QUERY_SERVICE_URL: http://query-service:8083
+      JAVA_OPTS: "-Xmx256m -Xms128m"
+
+  # ObservX Agent
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile-agent
+    container_name: observx-agent
+    depends_on:
+      - collector
+    environment:
+      COLLECTOR_URL: http://collector:8081
+      HOSTNAME: observx-agent
+      JAVA_OPTS: "-Xmx256m -Xms128m"
+
+volumes:
+  timescaledb-data:

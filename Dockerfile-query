@@ -1,0 +1,13 @@
+FROM maven:3.9-eclipse-temurin-21 AS build
+WORKDIR /app
+COPY pom.xml .
+COPY observx-common ./observx-common
+COPY observx-storage ./observx-storage
+COPY observx-query-service ./observx-query-service
+RUN mvn clean package -pl observx-query-service -am -DskipTests
+
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+COPY --from=build /app/observx-query-service/target/*.jar app.jar
+EXPOSE 8083
+ENTRYPOINT ["java", "-jar", "app.jar"]

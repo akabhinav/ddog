@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: observx-agent
+
+agent:
+  hostname: ${HOSTNAME:localhost}
+  collection:
+    interval: 10000  # 10 seconds
+
+collector:
+  url: ${COLLECTOR_URL:http://localhost:8081}
+
+server:
+  port: 8090
+
+logging:
+  level:
+    com.observx: INFO
